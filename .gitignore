@@ -34,3 +34,7 @@ htmlcov/
 !.vscode/extensions.json
 *.code-workspace
 .history/
+
+# ---------- Large downloaded data (re-create with the scripts) ----------
+data/hrrr15_stations_*/
+data/*.log

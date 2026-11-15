@@ -98,3 +98,16 @@ Findings:
 - On 2025-10-15 temperature, RH, wind speed and direction, pressure, cloud cover were complete
   at all 5 stations; dew point (v2 API), gusts, visibility, snow depth, sunshine were 100% missing.
 - Stations are mostly airports (nearest to Wenatchee: Pangborn airport, 8.6 km), not orchards.
+
+## Kansas Mesonet stations: 15-min HRRR at each station
+
+`data/ks_stations_both_heights.csv`: 73 Kansas Mesonet (KSRE) stations that measure at two heights.
+
+```bash
+python science/fetch_hrrr15_stations.py data/ks_stations_both_heights.csv 2024-11-15 2026-11-14
+```
+
+Writes one CSV per station to `data/hrrr15_stations_ks_stations_both_heights/` (about 3 MB and
+1 minute per station for 2 years; **not in git**, re-create with the command). Same columns as the
+15-min output above, with `time_utc` in **UTC**. Stopped runs can be restarted; finished stations are skipped.
+HRRR 15-min has temperature at 2 m only, so dT must come from the stations' own two-height readings.

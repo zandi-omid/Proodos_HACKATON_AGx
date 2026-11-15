@@ -61,16 +61,28 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 PAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 
 
-def get_json(url, params, tries=3):
-    """GET with a few retries: the free API sometimes times out or is busy."""
-    for attempt in range(1, tries + 1):
+def get_json(url, params, tries=3, timeout=60):
+    """GET with retries: the free API sometimes times out, is busy (HTTP 5xx)
+    or rate-limits us (HTTP 429: wait and try again)."""
+    attempt, waits = 0, 0
+    while True:
         try:
-            r = requests.get(url, params=params, timeout=60)
+            r = requests.get(url, params=params, timeout=timeout)
+            if r.status_code == 429:  # rate limit: wait, don't count as a failed try
+                reason = r.json().get("reason", "")
+                if "Daily" in reason or waits >= 20:
+                    sys.exit(f"Open-Meteo limit reached: {reason} Re-run later; finished files are kept.")
+                pause = 600 if "Hourly" in reason else 60
+                print(f"  rate limited ({reason}) - waiting {pause} s...")
+                time.sleep(pause)
+                waits += 1
+                continue
             if r.status_code == 400:  # bad request (e.g. date out of range): retrying won't help
                 sys.exit(f"Open-Meteo rejected the request: {r.json().get('reason', r.text)}")
             r.raise_for_status()
             return r.json()
         except requests.RequestException as e:
+            attempt += 1
             if attempt == tries:
                 sys.exit(f"Could not reach Open-Meteo after {tries} tries ({e.__class__.__name__}). "
                          "Check your internet connection and try again in a minute.")
