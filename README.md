@@ -270,11 +270,9 @@ Output `data/forecast/hrrr_forecast_<points>_<step>_<fetch time>UTC.csv` (not in
 ### App: click a location in Kansas -> HRRR forecast
 
 ```bash
-conda activate hackaton            # or the venv with requirements.txt
+pip install -r requirements.txt
 streamlit run app/app.py           # settings in .streamlit/config.toml (port 8501, localhost)
 ```
 Click a location in Kansas. The app downloads NOAA's latest HRRR forecast (3 km) for that spot
 (cached 1 h) and shows the next ~48 h: temperature, humidity, wind at 10 m and 80 m, wind ratio,
 direction difference and temperature change (the model input features, `science/features.py`).
-On the Rain server: forward port 8501 in VS Code (PORTS tab) and open http://localhost:8501.
-`science/predict.py` + `models/README.md` hold the model plug-in (and a DEMO stand-in) for later.

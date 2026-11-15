@@ -1,5 +1,5 @@
-# Streamlit settings for running the app on a remote server (e.g. Rain) and opening it
-# through VS Code port forwarding or an SSH tunnel. Without these the page can stay blank.
+# Streamlit settings for running the app on a remote server and opening it through
+# port forwarding or an SSH tunnel. Without these the page can stay blank.
 [server]
 headless = true
 port = 8501
