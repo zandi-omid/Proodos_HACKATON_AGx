@@ -1,12 +1,11 @@
 """
-Spray or Wait? - click a location, get the next ~48 h forecast and spray guidance.
+Spray or Wait? - click a location in Kansas, see HRRR's forecast for it.
 
     streamlit run app/app.py
 
-Flow: click map -> download HRRR forecast for that point (Open-Meteo, cached 1 h)
-      -> features (science/features.py) -> 3 predictions (science/predict.py)
-      -> GO / CAUTION / STOP per time step, next GO windows, charts.
-Until the trained models are put in models/, a clearly labelled DEMO model is used.
+Click the map -> the app downloads NOAA's HRRR forecast (3 km, next ~48 h, via
+Open-Meteo, cached 1 h) for that spot and plots it, using the same feature
+columns as the model training data (science/features.py).
 """
 import sys
 from pathlib import Path
@@ -20,23 +19,19 @@ from streamlit_folium import st_folium
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "science"))
 from fetch_hrrr_forecast import get_forecast  # noqa: E402
-from predict import add_status, go_windows, load_models, predict, RULES  # noqa: E402
 
-STATUS_COLORS = {"GO": "#2e9d4f", "CAUTION": "#e8a33d", "STOP": "#d64545"}
-st.set_page_config(page_title="Spray or Wait?", page_icon="🌾", layout="wide")
+# Kansas bounding box (the north-east corner follows the Missouri River, so a few
+# points just outside Kansas there are still accepted)
+KS = {"lat_min": 36.99, "lat_max": 40.00, "lon_min": -102.05, "lon_max": -94.59}
+TZ = "America/Chicago"
+st.set_page_config(page_title="Spray or Wait? HRRR forecast", page_icon="🌾", layout="wide")
 
 
-# ---------- cached helpers ----------
 @st.cache_data(ttl=3600, show_spinner=False)
-def forecast_for(lat, lon, step):
-    """Live HRRR forecast for one point (cached 1 h, like HRRR's update cycle)."""
+def forecast_for(lat, lon):
+    """HRRR forecast for one point, 15-min steps (cached 1 h, like HRRR's update cycle)."""
     pts = pd.DataFrame([{"name": "selected", "latitude": lat, "longitude": lon}])
-    return get_forecast(pts, step=step)
-
-
-@st.cache_resource
-def models():
-    return load_models()
+    return get_forecast(pts, step="15min")
 
 
 @st.cache_data
@@ -44,134 +39,94 @@ def kansas_stations():
     return pd.read_csv(ROOT / "data" / "ks_stations_both_heights.csv")
 
 
-# ---------- sidebar ----------
-st.sidebar.title("Settings")
-tz = st.sidebar.selectbox("Show times in", ["America/Chicago", "America/Denver", "America/Los_Angeles",
-                                            "America/New_York", "America/Phoenix", "UTC"])
-step = st.sidebar.radio("Time step", ["15min", "hourly"],
-                        help="15-min matches the training data. HRRR 15-min values are real only for the "
-                             "first ~18 h; after that they are hourly values filled in.")
-m = models()
-if m:
-    st.sidebar.success("Using the trained models from models/")
-else:
-    st.sidebar.warning("DEMO model: no trained models found in models/. Predictions are rough "
-                       "hand-made rules, not real model output.")
-with st.sidebar.expander("GO / CAUTION / STOP rules"):
-    st.write(RULES)
-
-# ---------- header + map ----------
-st.title("Spray or Wait?")
-st.caption("Click a location on the map. The app downloads the latest HRRR forecast (3 km, NOAA) for that "
-           "spot and predicts the temperature inversion and wind differences between two heights for "
-           "the next ~48 hours.")
+st.title("Spray or Wait? — HRRR forecast for Kansas")
+st.caption("Click a location in Kansas. The app downloads NOAA's latest HRRR forecast (3 km grid) for "
+           "that spot and shows the next ~48 hours. Times are US Central.")
 
 if "loc" not in st.session_state:
     st.session_state.loc = None
 
-col_map, col_now = st.columns([3, 2])
-with col_map:
-    fmap = folium.Map(location=[38.5, -98.3], zoom_start=6, tiles="OpenStreetMap")
-    for _, s in kansas_stations().iterrows():
-        folium.CircleMarker([s["latitude"], s["longitude"]], radius=3, color="#555", fill=True,
-                            tooltip=s["name"]).add_to(fmap)
-    if st.session_state.loc:
-        folium.Marker(st.session_state.loc, icon=folium.Icon(color="red")).add_to(fmap)
-    click = st_folium(fmap, height=430, use_container_width=True, returned_objects=["last_clicked"])
-    if click and click.get("last_clicked"):
-        new = (round(click["last_clicked"]["lat"], 3), round(click["last_clicked"]["lng"], 3))
-        if new != st.session_state.loc:
-            st.session_state.loc = new
+# ---------- map ----------
+fmap = folium.Map(location=[38.5, -98.3], zoom_start=7, min_zoom=6, tiles="OpenStreetMap",
+                  max_bounds=True, min_lat=35.5, max_lat=41.5, min_lon=-104, max_lon=-92.5)
+folium.Rectangle([[KS["lat_min"], KS["lon_min"]], [KS["lat_max"], KS["lon_max"]]],
+                 color="#1f4e79", weight=2, fill=False).add_to(fmap)
+for _, s in kansas_stations().iterrows():
+    folium.CircleMarker([s["latitude"], s["longitude"]], radius=3, color="#555", fill=True,
+                        tooltip=s["name"]).add_to(fmap)
+if st.session_state.loc:
+    folium.Marker(st.session_state.loc, icon=folium.Icon(color="red")).add_to(fmap)
+click = st_folium(fmap, height=420, use_container_width=True, returned_objects=["last_clicked"])
+st.caption("Gray dots: Kansas Mesonet stations used for training.")
+
+if click and click.get("last_clicked"):
+    lat, lon = round(click["last_clicked"]["lat"], 3), round(click["last_clicked"]["lng"], 3)
+    if (lat, lon) != st.session_state.loc:
+        if KS["lat_min"] <= lat <= KS["lat_max"] and KS["lon_min"] <= lon <= KS["lon_max"]:
+            st.session_state.loc = (lat, lon)
             st.rerun()
-    st.caption("Gray dots: Kansas Mesonet stations used for training.")
+        else:
+            st.warning(f"{lat}, {lon} is outside Kansas — please click inside the blue box.")
 
 if not st.session_state.loc:
-    with col_now:
-        st.info("Click anywhere in the lower 48 US states to get a forecast.")
+    st.info("Click a location in Kansas to see its forecast.")
     st.stop()
 
+# ---------- forecast ----------
 lat, lon = st.session_state.loc
 with st.spinner(f"Downloading HRRR forecast for {lat}, {lon}..."):
     try:
-        fc = forecast_for(lat, lon, step)
-    except SystemExit as e:  # get_json stops with a message on API errors
+        fc = forecast_for(lat, lon)
+    except SystemExit as e:  # the download helper stops with a message on API errors
         st.error(f"Could not get the forecast: {e}")
         st.stop()
-if fc.empty or fc["temp_2m_F"].isna().all():
-    st.error("No HRRR data for this location. HRRR covers the lower 48 US states only.")
-    st.stop()
 
-df = add_status(predict(fc, m))
-df["local"] = df["time_utc"].dt.tz_localize("UTC").dt.tz_convert(tz).dt.tz_localize(None)
-fut = df[df["lead_hours"] >= 0].reset_index(drop=True)
+fc["local"] = fc["time_utc"].dt.tz_localize("UTC").dt.tz_convert(TZ).dt.tz_localize(None)
+fut = fc[fc["lead_hours"] >= 0].reset_index(drop=True)
 now = fut.iloc[0]
 
-# ---------- right now ----------
-with col_now:
-    st.subheader(f"{lat}, {lon}")
-    st.caption(f"Forecast downloaded {now['fetched_utc']:%Y-%m-%d %H:%M} UTC  ·  "
-               f"HRRR cell {now['hrrr_lat']:.3f}, {now['hrrr_lon']:.3f}  ·  model: {now['model']}")
-    color = STATUS_COLORS[now["status"]]
-    st.markdown(f"<div style='background:{color};color:white;padding:14px;border-radius:8px;"
-                f"font-size:1.6em;text-align:center'><b>{now['status']}</b> &nbsp; "
-                f"<span style='font-size:0.6em'>{now['local']:%a %H:%M}</span></div>",
-                unsafe_allow_html=True)
-    st.write(f"**Why:** {now['reasons']}")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Inversion dT", f"{now['dT_pred']:+.1f} °F", help="upper minus lower height; > 0 = inversion")
-    c2.metric("Wind speed diff", f"{now['speed_diff_pred']:+.1f} mph")
-    c3.metric("Wind dir diff", f"{now['dir_diff_pred']:.0f}°")
-    st.caption(f"Wind at 10 m: {now['wind_10m_mph']:.0f} mph · Temp at 2 m: {now['temp_2m_F']:.0f} °F")
+st.subheader(f"Forecast for {lat}, {lon}")
+st.caption(f"HRRR forecast downloaded {now['fetched_utc']:%Y-%m-%d %H:%M} UTC · grid cell centre "
+           f"{now['hrrr_lat']:.3f}, {now['hrrr_lon']:.3f} · {fut['local'].iloc[0]:%a %H:%M} to "
+           f"{fut['local'].iloc[-1]:%a %H:%M} (lead up to {fut['lead_hours'].max():.0f} h). "
+           "Accuracy drops further ahead; after ~18 h the 15-min steps are hourly values filled in.")
 
-    st.markdown("**Next GO windows**")
-    wins = go_windows(df)
-    if wins:
-        for a, b in wins[:4]:
-            a_l = pd.Timestamp(a).tz_localize("UTC").tz_convert(tz)
-            b_l = pd.Timestamp(b).tz_localize("UTC").tz_convert(tz)
-            lead = (pd.Timestamp(a) - now["fetched_utc"]).total_seconds() / 3600
-            st.write(f"🟢 {a_l:%a %H:%M} – {b_l:%H:%M}  (in {max(lead, 0):.0f} h)")
-    else:
-        st.write("No GO window in the forecast period.")
+c = st.columns(5)
+c[0].metric("Temp 2 m", f"{now['temp_2m_F']:.0f} °F")
+c[1].metric("Humidity 2 m", f"{now['rh_pct']} %")
+c[2].metric("Wind 10 m", f"{now['wind_10m_mph']:.0f} mph", help=f"from {now['dir_10m_deg']}°")
+c[3].metric("Wind 80 m", f"{now['wind_80m_mph']:.0f} mph", help=f"from {now['dir_80m_deg']}°")
+c[4].metric("Wind ratio 80/10", f"{now['wind_ratio_80_10']:.1f}",
+            help="> ~1.5 at night: the air near the ground is decoupled from the air above (inversion likely)")
 
-# ---------- charts ----------
-st.subheader("Hour by hour")
-st.caption("Background colour = GO / CAUTION / STOP. Lead time = hours after the forecast was downloaded. "
-           "**Accuracy drops further ahead**, and after ~18 h the 15-min steps are hourly values filled in "
-           "(dashed line).")
-step_len = pd.Timedelta(minutes=15 if step == "15min" else 60)
-band = fut.assign(end=fut["local"] + step_len)
-x = alt.X("local:T", title=f"Time ({tz})")
-tooltip = [alt.Tooltip("local:T", title="time", format="%a %H:%M"), "lead_hours", "status", "reasons",
-           "dT_pred", "speed_diff_pred", "dir_diff_pred", "wind_10m_mph"]
-background = alt.Chart(band).mark_rect(opacity=0.25).encode(
-    x=x, x2="end:T",
-    color=alt.Color("status:N", scale=alt.Scale(domain=list(STATUS_COLORS), range=list(STATUS_COLORS.values())),
-                    legend=alt.Legend(orient="top", title=None)),
-    tooltip=tooltip)
-cut = fut.loc[fut["lead_hours"] > 18, "local"]
-rule = (alt.Chart(pd.DataFrame({"t": [cut.iloc[0]]})).mark_rule(strokeDash=[4, 4], color="gray").encode(x="t:T")
-        if step == "15min" and len(cut) else None)
+x = alt.X("local:T", title="Time (US Central)")
+tip = [alt.Tooltip("local:T", title="time", format="%a %H:%M"), alt.Tooltip("lead_hours", title="lead (h)")]
 
 
-def panel(col, title, zero=False):
-    line = alt.Chart(fut).mark_line(color="#1f4e79").encode(x=x, y=alt.Y(f"{col}:Q", title=title), tooltip=tooltip)
-    layers = [background, line]
+def chart(cols, labels, title, zero=False, ymax=None):
+    """Line chart of one or more columns over time."""
+    long = fut.melt(id_vars=["local", "lead_hours"], value_vars=cols, var_name="series", value_name="value")
+    long["series"] = long["series"].map(dict(zip(cols, labels)))
+    long["value"] = long["value"].astype(float)
+    y = alt.Y("value:Q", title=title, scale=alt.Scale(domainMax=ymax) if ymax else alt.Undefined)
+    layers = [alt.Chart(long).mark_line().encode(
+        x=x, y=y, color=alt.Color("series:N", legend=alt.Legend(orient="top", title=None)),
+        tooltip=tip + ["series", alt.Tooltip("value:Q", format=".1f")])]
     if zero:
         layers.append(alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="black").encode(y="y:Q"))
-    if rule is not None:
-        layers.append(rule)
-    return alt.layer(*layers).properties(height=200)
+    return alt.layer(*layers).properties(height=220)
 
 
-st.altair_chart(panel("dT_pred", "Inversion dT (°F)", zero=True), width="stretch")
-c1, c2 = st.columns(2)
-c1.altair_chart(panel("speed_diff_pred", "Wind speed diff (mph)", zero=True), width="stretch")
-c2.altair_chart(panel("dir_diff_pred", "Wind direction diff (°)"), width="stretch")
+left, right = st.columns(2)
+left.altair_chart(chart(["temp_2m_F"], ["Temp 2 m"], "Temperature (°F)"), width="stretch")
+right.altair_chart(chart(["wind_10m_mph", "wind_80m_mph"], ["10 m", "80 m"], "Wind speed (mph)"), width="stretch")
+left.altair_chart(chart(["wind_ratio_80_10"], ["80 m / 10 m"], "Wind ratio 80/10", ymax=8), width="stretch")
+right.altair_chart(chart(["dir_diff_deg"], ["80 m vs 10 m"], "Wind direction difference (°)"), width="stretch")
+left.altair_chart(chart(["cooling_F_per_hr"], ["2 m change"], "Temp change (°F per hour)", zero=True),
+                  width="stretch")
+right.altair_chart(chart(["rh_pct"], ["Humidity 2 m"], "Relative humidity (%)"), width="stretch")
 
-with st.expander("All forecast rows"):
-    show = fut[["local", "lead_hours", "status", "reasons", "dT_pred", "speed_diff_pred", "dir_diff_pred",
-                "temp_2m_F", "rh_pct", "wind_10m_mph", "wind_80m_mph", "real_15min"]]
-    st.dataframe(show, width="stretch", hide_index=True)
+with st.expander("All forecast values (model input features)"):
+    st.dataframe(fut, width="stretch", hide_index=True)
     st.download_button("Download CSV", fut.to_csv(index=False).encode(),
-                       file_name=f"spray_forecast_{lat}_{lon}.csv", mime="text/csv")
+                       file_name=f"hrrr_forecast_{lat}_{lon}.csv", mime="text/csv")
