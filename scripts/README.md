@@ -107,3 +107,12 @@ Predicts both heights for every orchard cell and time, applies the rules, and wr
 - `orchard_forecast_<cycle>.parquet`: status, reasons, readings, and what a single 5 ft station would say;
 - `orchard_log_<cycle>.csv`: the time-stamped alert log;
 - `orchard_summary_<cycle>.csv`: status now and the next safe window (GO for at least 1 hour) per cell.
+
+## 12. App
+
+```
+python make_app.py                 # as a job: needs about 32 GB
+```
+Builds `index.html` (also saved as `spray_or_wait.html`), one self-contained page: a map of Kansas with the orchard cells coloured by status, a time slider for the next 18 hours, and for each cell the status with confidence, the reasons, both-height readings, the single-station comparison, the next safe window and a downloadable time-stamped log.
+
+Confidence: the model's held-out errors (`oof.parquet`) are added to each forecast 100 times and the rules re-applied; the share of each outcome is its probability. GO is shown only when it is at least 60% likely, otherwise CAUTION.

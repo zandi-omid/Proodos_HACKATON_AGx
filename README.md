@@ -93,6 +93,7 @@ All scripts are in [`scripts/`](scripts/README.md) and run from one working fold
 | 9. Orchard cells | `s2_orchards.py`, then `dino_feats.py` again | Latest clear image and features for 1,845 orchard cells |
 | 10. Forecast | `hrrr_fcst.py` | HRRR 15-minute forecast, 0 to 18 h, per orchard cell |
 | 11. Decide | `predict_orchards.py` | Status, reasons, log, next safe window per cell |
+| 12. App | `make_app.py` | `index.html`: interactive map with status, confidence, reasons, log and model accuracy |
 
 ## Data sources
 
