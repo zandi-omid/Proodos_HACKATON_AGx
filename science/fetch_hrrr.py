@@ -5,7 +5,7 @@ from Open-Meteo - no API key, no GRIB files.
 Two modes:
   Future (forecast, next ~2 days, plus a few past days):
       python science/fetch_hrrr.py forecast
-  Past (retrospective, HRRR archive from ~Dec 2023):
+  Past (HRRR archive: surface from ~2018, pressure levels from ~Mar 2021):
       python science/fetch_hrrr.py past 2025-10-01 2025-10-07
 
 Output: one CSV per point in data/, e.g. data/hrrr_fresno_forecast.csv
@@ -22,6 +22,7 @@ The *_hrrr columns are an all-HRRR check: the HRRR temperature profile
 Requires: pip install requests pandas numpy
 """
 import sys
+import time
 from pathlib import Path
 import requests
 import numpy as np
@@ -60,6 +61,23 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 PAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 
 
+def get_json(url, params, tries=3):
+    """GET with a few retries: the free API sometimes times out or is busy."""
+    for attempt in range(1, tries + 1):
+        try:
+            r = requests.get(url, params=params, timeout=60)
+            if r.status_code == 400:  # bad request (e.g. date out of range): retrying won't help
+                sys.exit(f"Open-Meteo rejected the request: {r.json().get('reason', r.text)}")
+            r.raise_for_status()
+            return r.json()
+        except requests.RequestException as e:
+            if attempt == tries:
+                sys.exit(f"Could not reach Open-Meteo after {tries} tries ({e.__class__.__name__}). "
+                         "Check your internet connection and try again in a minute.")
+            print(f"  Open-Meteo did not answer ({e.__class__.__name__}), retrying in {5 * attempt} s...")
+            time.sleep(5 * attempt)
+
+
 def fetch(lat, lon, mode, start=None, end=None, model="ncep_hrrr_conus"):
     params = {
         "latitude": lat, "longitude": lon,
@@ -76,9 +94,7 @@ def fetch(lat, lon, mode, start=None, end=None, model="ncep_hrrr_conus"):
         url = PAST_URL
         params.update({"start_date": start, "end_date": end})
 
-    r = requests.get(url, params=params, timeout=60)
-    r.raise_for_status()
-    j = r.json()
+    j = get_json(url, params)
     df = pd.DataFrame(j["hourly"])
     df["elev_m"] = j["elevation"]  # ground height above sea level used by Open-Meteo
     df = df.rename(columns={
@@ -105,16 +121,21 @@ def add_hrrr_80m(df, target_m=80):
     for _, row in df.iterrows():
         heights, temps = [2.0], [row["temp_2m_F"]]
         for p in PRESSURE_LEVELS:  # lowest level first, so heights go up
-            agl = row[f"geopotential_height_{p}hPa"] - row["elev_m"]
-            if row["surface_pressure"] > p and agl > 10:  # level is above ground
+            z, sp = row[f"geopotential_height_{p}hPa"], row["surface_pressure"]
+            if pd.isna(z) or pd.isna(sp) or pd.isna(row[f"temperature_{p}hPa"]):
+                continue  # no pressure-level data this hour (archive starts ~Mar 2021)
+            agl = z - row["elev_m"]
+            if sp > p and agl > 10:  # level is above ground
                 heights.append(agl)
                 temps.append(row[f"temperature_{p}hPa"])
-        t80.append(np.interp(target_m, heights, temps))
+        # need the 2 m value and at least one level above 80 m to interpolate
+        ok = not pd.isna(temps[0]) and max(heights) >= target_m
+        t80.append(np.interp(target_m, heights, temps) if ok else np.nan)
         lowest.append(round(heights[1]) if len(heights) > 1 else np.nan)
     df["temp_80m_hrrr_F"] = np.round(t80, 1)
     df["hrrr_lowest_level_agl_m"] = lowest
     df["dT_80m_hrrr_minus_2m_F"] = (df["temp_80m_hrrr_F"] - df["temp_2m_F"]).round(1)
-    df["inversion_hrrr"] = df["dT_80m_hrrr_minus_2m_F"] > 0
+    df["inversion_hrrr"] = (df["dT_80m_hrrr_minus_2m_F"] > 0).where(df["dT_80m_hrrr_minus_2m_F"].notna())
     raw = [c for c in df.columns if c.endswith("hPa")]
     return df.drop(columns=raw + ["surface_pressure"])
 
@@ -129,6 +150,9 @@ def main():
     for name, (lat, lon) in POINTS.items():
         # Everything HRRR has (2 m temp, 10 m & 80 m wind, RH, cloud) comes from HRRR.
         df = fetch(lat, lon, mode, start, end)
+        if df["temp_2m_F"].isna().all():
+            sys.exit(f"HRRR has no data for {start} to {end}. "
+                     "The archive starts around 2018 (HRRR 80 m estimate from ~Mar 2021).")
         df["temp_80m_source"] = "hrrr"
 
         # Open-Meteo does NOT publish HRRR temperature at 80 m, so that column comes
@@ -143,10 +167,15 @@ def main():
 
         df["temp_80m_F"] = df["temp_80m_F"].astype(float)  # empty HRRR column was text
         df["dT_80m_minus_2m_F"] = (df["temp_80m_F"] - df["temp_2m_F"]).round(1)
-        df["inversion"] = df["dT_80m_minus_2m_F"] > 0
+        # inversion = dT > 0; left empty (not False) when there is no 80 m data
+        df["inversion"] = (df["dT_80m_minus_2m_F"] > 0).where(df["dT_80m_minus_2m_F"].notna())
         df = add_hrrr_80m(df)
         out = DATA_DIR / f"hrrr_{name}_{mode}.csv"
         df.to_csv(out, index=False)
+        for col, label in (("temp_80m_F", "GFS"), ("temp_80m_hrrr_F", "HRRR")):
+            if df[col].isna().all():
+                print(f"  WARNING {name}: no {label} 80 m temperature for these dates -> "
+                      f"its inversion column is empty (unknown), not 'no inversion'")
         n_inv = int(df["inversion"].sum())
         n_hrrr = int(df["inversion_hrrr"].sum())
         print(f"{name}: {len(df)} hours saved to data/{out.name}  |  inversion hours: "

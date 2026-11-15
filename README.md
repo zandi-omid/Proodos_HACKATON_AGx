@@ -26,7 +26,8 @@ python science/plot_15min.py kern_almonds past                 # 15-min signals 
 
 - Scripts can be run from any folder; output always goes to `data/`.
 - Each run **overwrites** the CSVs for the same point and mode.
-- `forecast` = last 2 days + next 2 days. `past` works from about Dec 2023 on.
+- `forecast` = last 2 days + next 2 days. `past` works from about 2018 on; the HRRR-only
+  80 m columns (`*_hrrr`) need dates from about 23 Mar 2021 on (empty before that).
 
 ### Add your own location
 

@@ -21,6 +21,7 @@ csv_path = sys.argv[1] if len(sys.argv) > 1 else "data/hrrr_fresno_past.csv"
 png_path = sys.argv[2] if len(sys.argv) > 2 else "data/fresno_inversion.png"
 
 df = pd.read_csv(csv_path, parse_dates=["time"])
+df["inversion"] = df["inversion"].eq(True)  # blank (no 80 m data) counts as not inversion here
 
 # ---- 1. Group consecutive inversion hours into "episodes" ----
 # A new episode starts every time the inversion flag flips.

@@ -20,7 +20,7 @@ mode = sys.argv[2] if len(sys.argv) > 2 else "past"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"  # <repo>/data
 q = pd.read_csv(DATA_DIR / f"hrrr15_{point}_{mode}.csv", parse_dates=["time"])
 h = pd.read_csv(DATA_DIR / f"hrrr_{point}_{mode}.csv", parse_dates=["time"])
-inv_hours = h.loc[h["inversion"] & h["inversion_hrrr"], "time"]
+inv_hours = h.loc[h["inversion"].eq(True) & h["inversion_hrrr"].eq(True), "time"]  # blank = unknown
 
 fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
 ax1, ax2, ax3, ax4 = axes

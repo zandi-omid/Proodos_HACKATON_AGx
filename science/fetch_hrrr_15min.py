@@ -19,10 +19,9 @@ Output: data/hrrr15_<point>_<mode>.csv, one row every 15 min, local time.
 Requires: pip install requests pandas
 """
 import sys
-import requests
 import pandas as pd
 
-from fetch_hrrr import POINTS, DATA_DIR, FORECAST_URL, PAST_URL  # same points, folder & endpoints
+from fetch_hrrr import POINTS, DATA_DIR, FORECAST_URL, PAST_URL, get_json  # shared settings & helper
 
 # Real 15-minute HRRR variables (checked: they are not just interpolated hourly values)
 MINUTELY_15 = [
@@ -48,9 +47,7 @@ def fetch_15min(lat, lon, mode, start=None, end=None):
         url = PAST_URL
         params.update({"start_date": start, "end_date": end})
 
-    r = requests.get(url, params=params, timeout=60)
-    r.raise_for_status()
-    df = pd.DataFrame(r.json()["minutely_15"]).rename(columns={
+    df = pd.DataFrame(get_json(url, params)["minutely_15"]).rename(columns={
         "temperature_2m": "temp_2m_F", "relative_humidity_2m": "rh_pct",
         "wind_speed_10m": "wind_10m_mph", "wind_speed_80m": "wind_80m_mph",
         "wind_direction_10m": "dir_10m_deg", "wind_direction_80m": "dir_80m_deg",
@@ -78,7 +75,10 @@ def main():
         sys.exit("Usage: python science/fetch_hrrr_15min.py past YYYY-MM-DD YYYY-MM-DD")
 
     for name, (lat, lon) in POINTS.items():
-        df = add_signals(fetch_15min(lat, lon, mode, start, end))
+        df = fetch_15min(lat, lon, mode, start, end)
+        if df.empty:
+            sys.exit(f"HRRR has no 15-min data for {start} to {end}. Try a more recent date.")
+        df = add_signals(df)
         out = DATA_DIR / f"hrrr15_{name}_{mode}.csv"
         df.to_csv(out, index=False)
         print(f"{name}: {len(df)} rows (15 min) saved to data/{out.name}")

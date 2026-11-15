@@ -37,7 +37,7 @@ ax2.plot(t, df["dT_80m_minus_2m_F"], color="tab:red", label="dT with GFS 80 m")
 ax2.plot(t, df["dT_80m_hrrr_minus_2m_F"], color="tab:red", ls="--", label="dT with HRRR 80 m")
 ax2.axhline(0, color="black", lw=0.8)
 # shade hours where the all-HRRR estimate says inversion
-ax2.fill_between(t, 0, 1, where=df["inversion_hrrr"], transform=ax2.get_xaxis_transform(),
+ax2.fill_between(t, 0, 1, where=df["inversion_hrrr"].eq(True), transform=ax2.get_xaxis_transform(),
                  color="orange", alpha=0.25, step="post", label="Inversion (HRRR)")
 ax2.set_ylabel("T80m - T2m (F)\n> 0 = inversion")
 ax2.legend(loc="upper left", ncol=3)
