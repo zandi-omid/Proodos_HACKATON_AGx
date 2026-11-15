@@ -6,7 +6,8 @@ Station CSV needs columns: name, latitude, longitude  (e.g. data/ks_stations_bot
     python science/fetch_hrrr15_stations.py                                   # Kansas, last year
     python science/fetch_hrrr15_stations.py data/ks_stations_both_heights.csv 2025-11-15 2026-11-14 --workers 24
 
-Variables (only the ones HRRR really outputs every 15 min - see fetch_hrrr_15min.py):
+Variables (real 15-min output, except rh_pct = hourly filled in; see fetch_hrrr_15min.py).
+Real 15-min data starts about 2023-09-22: use dates from then on.
   temp_2m_F, rh_pct, wind_10m_mph, wind_80m_mph, dir_10m_deg, dir_80m_deg
   + inversion hints: wind_ratio_80_10, dir_diff_deg, cooling_F_per_hr
 No 80 m temperature, so no dT here: the stations' own two-height temperatures give dT.

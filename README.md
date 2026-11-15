@@ -23,7 +23,7 @@ python science/fetch_hrrr.py forecast                      # next 2 days + past 
 python science/fetch_hrrr.py past 2025-10-01 2025-10-07    # historical week
 python science/summarize_inversions.py                     # Fresno summary + data/fresno_inversion.png
 python science/plot_point.py data/hrrr_kern_almonds_past.csv  # 3-panel check plot for one point
-python science/fetch_hrrr_15min.py past 2025-10-01 2025-10-07  # 15-min data (real 15-min variables only)
+python science/fetch_hrrr_15min.py past 2025-10-01 2025-10-07  # 15-min data (real 15-min from 2023-09-22 on)
 python science/plot_15min.py kern_almonds past                 # 15-min signals vs hourly inversion
 python science/explore_meteostat.py                            # Meteostat stations in WA (baseline)
 ```
@@ -69,8 +69,12 @@ As an all-HRRR check, the HRRR pressure-level profile is also interpolated to 80
 
 ### 15-minute output: `data/hrrr15_<point>_<mode>.csv`
 
-Only variables HRRR really outputs every 15 min: `temp_2m_F`, `rh_pct`,
-`wind_10m_mph`, `wind_80m_mph`, `dir_10m_deg`, `dir_80m_deg`. No 80 m temperature,
+Real 15-min HRRR output: `temp_2m_F`, `wind_10m_mph`, `wind_80m_mph`, `dir_10m_deg`, `dir_80m_deg`.
+`rh_pct` is included but is **hourly values filled in** (use it as hourly).
+**Real 15-min data only exists from about 2023-09-22**; earlier dates return hourly values
+smoothed in between. Values at the top of the hour (:00) are jumpier than :15/:30/:45 (likely
+where separate HRRR runs are joined), so smooth over ~1 hour before using extremes.
+No 80 m temperature,
 so no dT; instead, inversion hints:
 
 | column | meaning |
@@ -104,7 +108,7 @@ Findings:
 `data/ks_stations_both_heights.csv`: 73 Kansas Mesonet (KSRE) stations that measure at two heights.
 
 ```bash
-python science/fetch_hrrr15_stations.py data/ks_stations_both_heights.csv 2025-11-15 2026-11-14 --workers 4
+python science/fetch_hrrr15_stations.py data/ks_stations_both_heights.csv 2023-09-22 2026-11-14 --workers 4
 ```
 
 Writes one CSV per station to `data/hrrr15_stations_ks_stations_both_heights_<start>_<end>/` (about 1.8 MB per

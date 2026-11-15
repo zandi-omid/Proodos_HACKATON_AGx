@@ -1,7 +1,10 @@
 """
-Download 15-minute HRRR weather from Open-Meteo, using ONLY variables that
-HRRR really outputs every 15 minutes (not hourly values filled in):
-  temperature 2 m, relative humidity 2 m, wind speed + direction at 10 m and 80 m.
+Download 15-minute HRRR weather from Open-Meteo.
+Real 15-min model output (checked): temperature 2 m, wind speed + direction at 10 m and 80 m.
+Relative humidity 2 m is also included, but it is HOURLY values filled in between
+(checked: its 15-min wiggles do not follow temperature's), so use it as hourly.
+Real 15-min data only exists from about 22 Sep 2023; before that ALL variables
+are hourly values smoothed in between.
 
 There is no 80 m temperature here, so no dT. Instead we compute signals that
 hint at an inversion (stable, "decoupled" air near the ground):
@@ -23,7 +26,7 @@ import pandas as pd
 
 from fetch_hrrr import POINTS, DATA_DIR, FORECAST_URL, PAST_URL, get_json  # shared settings & helper
 
-# Real 15-minute HRRR variables (checked: they are not just interpolated hourly values)
+# 15-min variables: all real 15-min output except relative_humidity_2m (hourly, filled in)
 MINUTELY_15 = [
     "temperature_2m", "relative_humidity_2m",
     "wind_speed_10m", "wind_speed_80m",
