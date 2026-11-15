@@ -139,3 +139,18 @@ Output `data/forecast/hrrr_forecast_<points>_<step>_<fetch time>UTC.csv` (not in
 - HRRR reaches ~45-48 h ahead. **Real 15-min values only for the first ~18 h**; later 15-min steps are
   hourly values filled in (`real_15min = False`). Accuracy drops with lead time.
 - Many points per request; responses cached in `data/forecast_cache/` and reused for 60 min.
+
+## App: click a location -> forecast + spray guidance
+
+```bash
+streamlit run app/app.py
+```
+Click a point on the map (lower 48 US). The app downloads the live HRRR forecast for that spot
+(cached 1 h), builds the features (`science/features.py`), predicts the inversion **dT**, the
+**wind speed difference** and the **wind direction difference** between two heights for the next ~48 h
+(`science/predict.py`), and shows GO / CAUTION / STOP with reasons, the next GO windows, lead time and charts.
+- Until the trained models are in `models/` (see `models/README.md`), a clearly labelled **DEMO** model
+  (hand-made rules, not trained) is used.
+- GO / CAUTION / STOP rules are in `RULES` in `science/predict.py` (wind 3-10 mph per common label
+  guidance; inversion and shear limits are placeholders to tune).
+- On the Rain server run it there; VS Code forwards the port (8501) so it opens in your browser.

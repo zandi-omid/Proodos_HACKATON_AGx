@@ -3,3 +3,9 @@ pandas>=2.3
 numpy
 matplotlib
 meteostat>=2
+streamlit
+streamlit-folium
+folium
+altair
+scikit-learn
+joblib
