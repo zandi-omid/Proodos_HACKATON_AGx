@@ -16,6 +16,8 @@ python science/fetch_hrrr.py forecast                      # next 2 days + past 
 python science/fetch_hrrr.py past 2025-10-01 2025-10-07    # historical week
 python science/summarize_inversions.py                     # Fresno summary + data/fresno_inversion.png
 python science/plot_point.py data/hrrr_kern_almonds_past.csv  # 3-panel check plot for one point
+python science/fetch_hrrr_15min.py past 2025-10-01 2025-10-07  # 15-min data (real 15-min variables only)
+python science/plot_15min.py kern_almonds past                 # 15-min signals vs hourly inversion
 ```
 
 Weather comes from NOAA HRRR via Open-Meteo (no API key). Open-Meteo has no HRRR
@@ -37,3 +39,18 @@ As an all-HRRR check, the HRRR pressure-level profile is also interpolated to 80
 | `temp_80m_hrrr_F` | HRRR-only 80 m temperature (profile interpolated) |
 | `hrrr_lowest_level_agl_m` | height of lowest HRRR level used (~40 m good, ~200 m = rough estimate) |
 | `dT_80m_hrrr_minus_2m_F`, `inversion_hrrr` | T80m - T2m with HRRR 80 m; inversion if > 0 |
+
+### 15-minute output: `data/hrrr15_<point>_<mode>.csv`
+
+Only variables HRRR really outputs every 15 min: `temp_2m_F`, `rh_pct`,
+`wind_10m_mph`, `wind_80m_mph`, `dir_10m_deg`, `dir_80m_deg`. No 80 m temperature,
+so no dT; instead, inversion hints:
+
+| column | meaning |
+|---|---|
+| `wind_ratio_80_10` | wind 80 m / wind 10 m; > ~1.5 at night = ground layer decoupled |
+| `dir_diff_deg` | wind direction difference between 10 m and 80 m (0-180) |
+| `cooling_F_per_hr` | 2 m temperature change over the last hour |
+
+Against the hourly dT (hours where GFS and HRRR agree), `wind_ratio_80_10 >= 1.5`
+catches 80% of inversion hours with 16% false alarms; `>= 2` catches 64% with 4%.
