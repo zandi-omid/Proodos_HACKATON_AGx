@@ -1,4 +1,5 @@
 requests
-pandas
+pandas>=2.3
 numpy
 matplotlib
+meteostat>=2

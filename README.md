@@ -10,11 +10,14 @@ A tool that uses weather readings at 5 ft and 30 ft to tell orchard sprayers **G
 
 ## Quick start
 
-Needs Python 3.9+ and internet. No API key or account.
+Needs Python 3.11+ and internet. No API key or account.
+Use a virtual environment: Meteostat needs pandas >= 2.3, which can clash with
+an existing Anaconda install if you `pip install` into it directly.
 
 ```bash
 git clone https://github.com/zandi-omid/Proodos_HACKATON_AGx.git
 cd Proodos_HACKATON_AGx
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python science/fetch_hrrr.py forecast                      # next 2 days + past 2 days
 python science/fetch_hrrr.py past 2025-10-01 2025-10-07    # historical week
@@ -22,6 +25,7 @@ python science/summarize_inversions.py                     # Fresno summary + da
 python science/plot_point.py data/hrrr_kern_almonds_past.csv  # 3-panel check plot for one point
 python science/fetch_hrrr_15min.py past 2025-10-01 2025-10-07  # 15-min data (real 15-min variables only)
 python science/plot_15min.py kern_almonds past                 # 15-min signals vs hourly inversion
+python science/explore_meteostat.py                            # Meteostat stations in WA (baseline)
 ```
 
 - Scripts can be run from any folder; output always goes to `data/`.
@@ -77,3 +81,20 @@ so no dT; instead, inversion hints:
 
 Against the hourly dT (hours where GFS and HRRR agree), `wind_ratio_80_10 >= 1.5`
 catches 80% of inversion hours with 16% false alarms; `>= 2` catches 64% with 4%.
+
+## Meteostat: single-station baseline (Washington State)
+
+`science/explore_meteostat.py` (Meteostat v2 API, falls back to v1) writes:
+- `data/meteostat_wa_stations.csv`: all 51 WA stations (48 with hourly data):
+  id, name, lat, lon, elevation, first/last date of hourly data
+- `data/meteostat_wenatchee_2025-10-15.csv`: hourly data, 5 stations nearest Wenatchee, in F and mph
+- `data/meteostat_wa_map.png`
+
+Findings:
+- Temperature/humidity at **one** height (~2 m), wind at **one** height (~10 m),
+  the airport standard. Meteostat has no height field and **no variable at two heights**,
+  so it cannot see an inversion; it is the "single weather station" the challenge compares against.
+- Temperatures are whole degrees C (~1.8 F steps). Hourly only.
+- On 2025-10-15 temperature, RH, wind speed and direction, pressure, cloud cover were complete
+  at all 5 stations; dew point (v2 API), gusts, visibility, snow depth, sunshine were 100% missing.
+- Stations are mostly airports (nearest to Wenatchee: Pangborn airport, 8.6 km), not orchards.
