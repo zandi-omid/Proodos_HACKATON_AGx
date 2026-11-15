@@ -22,7 +22,7 @@ import sys
 import requests
 import pandas as pd
 
-from fetch_hrrr import POINTS, FORECAST_URL, PAST_URL  # same points & endpoints
+from fetch_hrrr import POINTS, DATA_DIR, FORECAST_URL, PAST_URL  # same points, folder & endpoints
 
 # Real 15-minute HRRR variables (checked: they are not just interpolated hourly values)
 MINUTELY_15 = [
@@ -79,9 +79,9 @@ def main():
 
     for name, (lat, lon) in POINTS.items():
         df = add_signals(fetch_15min(lat, lon, mode, start, end))
-        out = f"data/hrrr15_{name}_{mode}.csv"
+        out = DATA_DIR / f"hrrr15_{name}_{mode}.csv"
         df.to_csv(out, index=False)
-        print(f"{name}: {len(df)} rows (15 min) saved to {out}")
+        print(f"{name}: {len(df)} rows (15 min) saved to data/{out.name}")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,11 @@ A tool that uses weather readings at 5 ft and 30 ft to tell orchard sprayers **G
 
 ## Quick start
 
+Needs Python 3.9+ and internet. No API key or account.
+
 ```bash
+git clone https://github.com/zandi-omid/Proodos_HACKATON_AGx.git
+cd Proodos_HACKATON_AGx
 pip install -r requirements.txt
 python science/fetch_hrrr.py forecast                      # next 2 days + past 2 days
 python science/fetch_hrrr.py past 2025-10-01 2025-10-07    # historical week
@@ -19,6 +23,24 @@ python science/plot_point.py data/hrrr_kern_almonds_past.csv  # 3-panel check pl
 python science/fetch_hrrr_15min.py past 2025-10-01 2025-10-07  # 15-min data (real 15-min variables only)
 python science/plot_15min.py kern_almonds past                 # 15-min signals vs hourly inversion
 ```
+
+- Scripts can be run from any folder; output always goes to `data/`.
+- Each run **overwrites** the CSVs for the same point and mode.
+- `forecast` = last 2 days + next 2 days. `past` works from about Dec 2023 on.
+
+### Add your own location
+
+Edit the `POINTS` list at the top of [`science/fetch_hrrr.py`](science/fetch_hrrr.py)
+(the 15-min script uses the same list). Name, then (latitude, longitude); US only (HRRR covers CONUS):
+
+```python
+POINTS = {
+    "kern_almonds": (35.60, -119.33),
+    "my_orchard":   (36.50, -119.80),   # <- add a line
+}
+```
+
+### Data source
 
 Weather comes from NOAA HRRR via Open-Meteo (no API key). Open-Meteo has no HRRR
 temperature at 80 m, so that one column is filled from NOAA GFS (`temp_80m_source`).

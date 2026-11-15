@@ -9,6 +9,7 @@ Saves data/hrrr15_<point>_<mode>.png
 Requires: pip install pandas matplotlib
 """
 import sys
+from pathlib import Path
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")  # no screen needed
@@ -16,8 +17,9 @@ import matplotlib.pyplot as plt
 
 point = sys.argv[1] if len(sys.argv) > 1 else "kern_almonds"
 mode = sys.argv[2] if len(sys.argv) > 2 else "past"
-q = pd.read_csv(f"data/hrrr15_{point}_{mode}.csv", parse_dates=["time"])
-h = pd.read_csv(f"data/hrrr_{point}_{mode}.csv", parse_dates=["time"])
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"  # <repo>/data
+q = pd.read_csv(DATA_DIR / f"hrrr15_{point}_{mode}.csv", parse_dates=["time"])
+h = pd.read_csv(DATA_DIR / f"hrrr_{point}_{mode}.csv", parse_dates=["time"])
 inv_hours = h.loc[h["inversion"] & h["inversion_hrrr"], "time"]
 
 fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
@@ -47,6 +49,6 @@ for ax in axes:
 fig.suptitle(f"{point} {mode}: 15-min HRRR  (orange = hourly dT says inversion, GFS and HRRR agree)")
 fig.autofmt_xdate()
 fig.tight_layout()
-out = f"data/hrrr15_{point}_{mode}.png"
+out = DATA_DIR / f"hrrr15_{point}_{mode}.png"
 fig.savefig(out, dpi=110)
 print(f"Plot saved to {out}")

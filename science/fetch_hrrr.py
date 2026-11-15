@@ -22,11 +22,12 @@ The *_hrrr columns are an all-HRRR check: the HRRR temperature profile
 Requires: pip install requests pandas numpy
 """
 import sys
+from pathlib import Path
 import requests
 import numpy as np
 import pandas as pd
 
-# ---- 1. Your points (edit freely) ----
+# ---- 1. Your points (edit freely): "name": (latitude, longitude), US only ----
 POINTS = {
     "fresno":     (36.74, -119.79),   # Central Valley orchards
     "modesto":    (37.64, -120.99),
@@ -51,6 +52,9 @@ PRESSURE_LEVELS = [1000, 975, 950, 925]   # highest pressure (lowest height) fir
 HOURLY += ["surface_pressure"]
 HOURLY += [f"temperature_{p}hPa" for p in PRESSURE_LEVELS]
 HOURLY += [f"geopotential_height_{p}hPa" for p in PRESSURE_LEVELS]
+
+# Output folder: <repo>/data, so the script works from any working directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 PAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
@@ -141,11 +145,11 @@ def main():
         df["dT_80m_minus_2m_F"] = (df["temp_80m_F"] - df["temp_2m_F"]).round(1)
         df["inversion"] = df["dT_80m_minus_2m_F"] > 0
         df = add_hrrr_80m(df)
-        out = f"data/hrrr_{name}_{mode}.csv"
+        out = DATA_DIR / f"hrrr_{name}_{mode}.csv"
         df.to_csv(out, index=False)
         n_inv = int(df["inversion"].sum())
         n_hrrr = int(df["inversion_hrrr"].sum())
-        print(f"{name}: {len(df)} hours saved to {out}  |  inversion hours: "
+        print(f"{name}: {len(df)} hours saved to data/{out.name}  |  inversion hours: "
               f"{n_inv} (GFS 80 m), {n_hrrr} (HRRR profile at 80 m)")
 
 
