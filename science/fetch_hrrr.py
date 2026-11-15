@@ -69,10 +69,14 @@ def get_json(url, params, tries=3, timeout=60):
         try:
             r = requests.get(url, params=params, timeout=timeout)
             if r.status_code == 429:  # rate limit: wait, don't count as a failed try
-                reason = r.json().get("reason", "")
+                try:
+                    reason = r.json().get("reason", "")
+                except ValueError:  # busy server may not send JSON
+                    reason = r.text[:100]
                 if "Daily" in reason or waits >= 20:
                     sys.exit(f"Open-Meteo limit reached: {reason} Re-run later; finished files are kept.")
-                pause = 600 if "Hourly" in reason else 60
+                # too many parallel requests clears fast; per-minute/hour limits need longer
+                pause = 600 if "Hourly" in reason else 10 if "concurrent" in reason else 60
                 print(f"  rate limited ({reason}) - waiting {pause} s...")
                 time.sleep(pause)
                 waits += 1

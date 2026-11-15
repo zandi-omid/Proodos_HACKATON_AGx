@@ -104,10 +104,11 @@ Findings:
 `data/ks_stations_both_heights.csv`: 73 Kansas Mesonet (KSRE) stations that measure at two heights.
 
 ```bash
-python science/fetch_hrrr15_stations.py data/ks_stations_both_heights.csv 2024-11-15 2026-11-14
+python science/fetch_hrrr15_stations.py data/ks_stations_both_heights.csv 2025-11-15 2026-11-14 --workers 4
 ```
 
-Writes one CSV per station to `data/hrrr15_stations_ks_stations_both_heights/` (about 3 MB and
-1 minute per station for 2 years; **not in git**, re-create with the command). Same columns as the
+Writes one CSV per station to `data/hrrr15_stations_ks_stations_both_heights_<start>_<end>/` (about 1.8 MB per
+station per year; 73 stations took ~4 min; **not in git**, re-create with the command). More than ~4 workers
+hits Open-Meteo's "too many concurrent requests" limit (the script waits it out). Same columns as the
 15-min output above, with `time_utc` in **UTC**. Stopped runs can be restarted; finished stations are skipped.
 HRRR 15-min has temperature at 2 m only, so dT must come from the stations' own two-height readings.
