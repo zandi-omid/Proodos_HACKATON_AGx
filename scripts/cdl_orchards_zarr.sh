@@ -1,4 +1,7 @@
 #!/bin/bash
+# Spray or Wait? - Hack Arizona AgX 2026, challenge 1 (pesticide drift / temperature inversions).
+# Written by team Ioannis Lolos & Omid Zandi during the hackathon (15 Nov 2026), with help from an
+# AI coding assistant. Timeline and who did what: README, section "Built during the hackathon".
 # Orchard-only 2025 CDL at 10 m, read from the Source Cooperative Zarr copy (no zip download).
 # Usage:  cd /scratch/ilolos/HACKATHON_AGX/CDL && sbatch cdl_orchards_zarr.sh
 #SBATCH -J cdl_orchards_zarr

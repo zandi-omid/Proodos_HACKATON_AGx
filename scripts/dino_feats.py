@@ -1,3 +1,6 @@
+# Spray or Wait? - Hack Arizona AgX 2026, challenge 1 (pesticide drift / temperature inversions).
+# Written by team Ioannis Lolos & Omid Zandi during the hackathon (15 Nov 2026), with help from an
+# AI coding assistant. Timeline and who did what: README, section "Built during the hackathon".
 """DINOv3 ViT-H+ (web) features for every clear Sentinel-2 date of every station.
 
 python dino_feats.py            (needs a GPU; reads s2/*.zarr, writes dino/<station>.zarr)

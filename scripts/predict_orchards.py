@@ -1,3 +1,6 @@
+# Spray or Wait? - Hack Arizona AgX 2026, challenge 1 (pesticide drift / temperature inversions).
+# Written by team Ioannis Lolos & Omid Zandi during the hackathon (15 Nov 2026), with help from an
+# AI coding assistant. Timeline and who did what: README, section "Built during the hackathon".
 """Spray or Wait? Go / Caution / Stop for every Kansas orchard cell, every 15 min, next 18 h.
 
 python predict_orchards.py [hrrr_fcst_YYYYMMDDHH.parquet]     (default: newest hrrr_fcst_*.parquet)

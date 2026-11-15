@@ -1,3 +1,6 @@
+# Spray or Wait? - Hack Arizona AgX 2026, challenge 1 (pesticide drift / temperature inversions).
+# Written by team Ioannis Lolos & Omid Zandi during the hackathon (15 Nov 2026), with help from an
+# AI coding assistant. Timeline and who did what: README, section "Built during the hackathon".
 """Kansas Mesonet: raw 5-min data, last 4 years, for the 73 two-height stations.
 
 python ks_pull.py [workers]          (default 4 stations in parallel)

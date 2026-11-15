@@ -19,6 +19,30 @@ Two-height towers are rare, and a single ground station cannot see an inversion 
    - DINOv3 features of the latest clear Sentinel-2 image around the site (what the land looks like).
 3. **Apply it to orchards.** For every 3 km HRRR cell in Kansas that contains orchard (USDA Cropland Data Layer, 10 m), predict both heights every 15 minutes out to 18 hours and apply Go / Caution / Stop rules with plain-language reasons and a time-stamped log.
 
+## Built during the hackathon
+
+Everything in this repository was built by the team during Hack Arizona AgX 2026, on **15 November 2026**.
+The git history shows it: the first commit (empty project scaffold) is at 11:35 and the full pipeline
+was pushed at 16:27 (Arizona time, UTC-7). Every code file starts with a short header saying the same.
+
+| Time (AZ) | What we built | Where |
+|---|---|---|
+| 11:35 | Project scaffold | `README.md`, folders |
+| 11:55-12:45 | HRRR at two heights from Open-Meteo, first inversion analysis (Fresno, Kern County almonds), check of which HRRR values are real 15-minute output | `science/fetch_hrrr.py`, `science/fetch_hrrr_15min.py`, plots |
+| 12:57 | Single-station baseline: Meteostat stations in Washington State (one height only, cannot see inversions) | `science/explore_meteostat.py` |
+| 13:15-13:48 | 15-minute HRRR for the 73 Kansas Mesonet two-height stations (2023-09-22 to 2026-11-14), quality checks, discovery that real 15-min HRRR only starts 2023-09-22 | `science/fetch_hrrr15_stations.py`, `science/qc_station_plots.py` |
+| 14:50 | One shared feature definition for training and forecasting; live HRRR forecast -> model inputs | `science/features.py`, `science/fetch_hrrr_forecast.py` |
+| 14:58-15:03 | Click-a-location app (Streamlit) | `app/app.py` |
+| 16:27 | Full pipeline: Kansas Mesonet ground truth, Sentinel-2 + DINOv3 land features, LightGBM training with spatial cross-validation, HRRR orchard forecast, Go / Caution / Stop | `scripts/` |
+
+**Who did what:** Omid Zandi - HRRR data and features (`science/`), forecast download and app (`app/`).
+Ioannis Lolos - station data, Sentinel-2 / DINOv3, LightGBM training and the orchard forecast pipeline (`scripts/`).
+Design decisions, data checks and results were the team's.
+
+**Tools:** we used an AI coding assistant (Claude Code) to help write and debug code; the commits
+it helped with are marked `Co-Authored-By: Claude` in the git history. All data sources are public
+and listed below.
+
 ## Results
 
 Scores are on stations the model never saw (spatial cross-validation, stations held out in about 50 km blocks). This run used the 39 stations whose data had finished downloading, 3.68 million 15-minute rows, 64 predictors.

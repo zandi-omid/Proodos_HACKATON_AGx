@@ -1,3 +1,6 @@
+# Spray or Wait? - Hack Arizona AgX 2026, challenge 1 (pesticide drift / temperature inversions).
+# Written by team Ioannis Lolos & Omid Zandi during the hackathon (15 Nov 2026), with help from an
+# AI coding assistant. Timeline and who did what: README, section "Built during the hackathon".
 """
 Download 15-minute HRRR weather from Open-Meteo.
 Real 15-min model output (checked): temperature 2 m, wind speed + direction at 10 m and 80 m.

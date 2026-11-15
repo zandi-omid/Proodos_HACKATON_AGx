@@ -1,3 +1,6 @@
+# Spray or Wait? - Hack Arizona AgX 2026, challenge 1 (pesticide drift / temperature inversions).
+# Written by team Ioannis Lolos & Omid Zandi during the hackathon (15 Nov 2026), with help from an
+# AI coding assistant. Timeline and who did what: README, section "Built during the hackathon".
 """Latest >=80%-clear Sentinel-2 RGB for every HRRR cell in Kansas that contains orchard.
 
 Step 1 (login node, once):   python s2_orchards.py cells

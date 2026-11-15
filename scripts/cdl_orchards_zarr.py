@@ -1,3 +1,6 @@
+# Spray or Wait? - Hack Arizona AgX 2026, challenge 1 (pesticide drift / temperature inversions).
+# Written by team Ioannis Lolos & Omid Zandi during the hackathon (15 Nov 2026), with help from an
+# AI coding assistant. Timeline and who did what: README, section "Built during the hackathon".
 # Orchard-only 2025 CDL at native 10 m, read straight from the Source Cooperative copy of the USDA NASS CDL
 # (Icechunk/Zarr, EPSG:5070). No zip download needed.
 # Usage, from /scratch/ilolos/HACKATHON_AGX/CDL:  python cdl_orchards_zarr.py [threads]
