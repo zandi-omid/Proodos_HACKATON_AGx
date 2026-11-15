@@ -1,14 +1,116 @@
-# Spray or Wait? – Hack Arizona AgX 2026
+# Spray or Wait?
+
+Weather intelligence to prevent pesticide drift in orchards. Built for HACKATHON AGX.
+
+**Team:** Ioannis Lolos and Omid Zandi
+
+The tool tells a pesticide applicator whether it is safe to spray **right now and for the next 18 hours**, and why, using conditions at two heights (about 5 ft and 30 ft): temperature inversion, wind speed, and wind shear. It works at orchards that have **no weather tower**, by learning from real two-height weather stations.
+
+> This supports the applicator's decision. The pesticide label, on-site checks and regulations always come first.
+
+## The idea
+
+Two-height towers are rare, and a single ground station cannot see an inversion or wind shear. So:
+
+1. **Learn from real towers.** 73 Kansas Mesonet stations measure temperature and wind at both 2 m and 10 m every 5 minutes. These are the ground truth (measured, not simulated).
+2. **Predict the tower readings from data that exists everywhere.** A LightGBM model predicts the 10 m minus 2 m temperature difference and the wind at both heights from:
+   - HRRR weather forecasts (3 km, every 15 minutes),
+   - sun position and season,
+   - DINOv3 features of the latest clear Sentinel-2 image around the site (what the land looks like).
+3. **Apply it to orchards.** For every 3 km HRRR cell in Kansas that contains orchard (USDA Cropland Data Layer, 10 m), predict both heights every 15 minutes out to 18 hours and apply Go / Caution / Stop rules with plain-language reasons and a time-stamped log.
+
+## Results
+
+Scores are on stations the model never saw (spatial cross-validation, stations held out in about 50 km blocks). This run used the 39 stations whose data had finished downloading, 3.68 million 15-minute rows, 64 predictors.
+
+| Predicted quantity | Mean abs. error | R² | HRRR alone (MAE / R²) |
+|---|---|---|---|
+| Temperature difference, 10 m minus 2 m | 0.38 °C | 0.60 | not available in HRRR input |
+| Wind at 2 m, east-west | 0.76 m/s | 0.73 | not available |
+| Wind at 2 m, north-south | 0.82 m/s | 0.87 | not available |
+| Wind at 10 m, east-west | 1.07 m/s | 0.70 | 1.13 / 0.65 |
+| Wind at 10 m, north-south | 1.15 m/s | 0.83 | 1.20 / 0.81 |
+| Wind speed at 2 m | 0.81 m/s | | |
+| Wind speed at 10 m | 1.04 m/s | | |
+
+**Inversion detection** (inversion defined as more than 0.5 °C warmer at 10 m; this happens 28% of the time): the model catches **85%** of real inversions; 27% of its inversion alerts are false alarms.
+
+The strongest predictors of inversion are sun elevation (sunset and sunrise), humidity, how calm the last hour was, and the cooling rate, which matches the known physics.
+
+## Go / Caution / Stop rules
+
+Wind limits are the common guidance from the brief; actual limits depend on the label.
+
+| Status | Trigger |
+|---|---|
+| **STOP** | Inversion (more than 0.3 °C / 0.5 °F warmer at 30 ft) with wind under 3 mph at 5 ft |
+| **STOP** | Strong inversion (more than 1.0 °C / 1.8 °F) |
+| **STOP** | Wind over 10 mph at either height |
+| **CAUTION** | Weak inversion with wind of 3 mph or more |
+| **CAUTION** | Calm at 5 ft (under 3 mph) without an inversion |
+| **CAUTION** | Wind speed differs by more than 5 mph between heights |
+| **CAUTION** | Wind direction differs by more than 45° between heights |
+| **GO** | None of the above |
+
+## Pipeline
+
+All scripts are in [`scripts/`](scripts/README.md) and run from one working folder. The HRRR pull for the stations is in [`science/`](science/README.md), copied from the team repo [zandi-omid/Proodos_HACKATON_AGx](https://github.com/zandi-omid/Proodos_HACKATON_AGx).
+
+| Step | Script | Output |
+|---|---|---|
+| 1. Orchard map | `cdl_orchards_zarr.py` | Orchard-only CDL 2025 raster, 10 m, CONUS |
+| 2. Find two-height stations | `ks_check.py`, `make_station_list.py` | `ks_stations_both_heights.csv` (73 stations) |
+| 3. Station data | `ks_pull.py` | 5-minute data, last 4 years, one Parquet per station |
+| 4. Sentinel-2 at stations | `s2_pull.py` | Every image since May 2022 for the HRRR cell around each station |
+| 5. DINOv3 features | `dino_feats.py` | CLS token and 20 × 20 patch grid per clear image |
+| 6. HRRR at stations | [`science/fetch_hrrr15_stations.py`](science/README.md) | 15-minute HRRR per station, 2023-09-22 to 2026-11-14 |
+| 7. Training table | `build_table.py`, `prep_lgbm.py` | One row per station per 15 minutes |
+| 8. Train | `train_lgbm.py` | 5 models, held-out predictions, metrics |
+| 9. Orchard cells | `s2_orchards.py`, then `dino_feats.py` again | Latest clear image and features for 1,845 orchard cells |
+| 10. Forecast | `hrrr_fcst.py` | HRRR 15-minute forecast, 0 to 18 h, per orchard cell |
+| 11. Decide | `predict_orchards.py` | Status, reasons, log, next safe window per cell |
+
+## Data sources
+
+| Data | Use | Terms |
+|---|---|---|
+| [Kansas Mesonet](https://mesonet.k-state.edu) | Ground truth: temperature and wind at 2 m and 10 m | Free for public use; cite as below |
+| NOAA HRRR, 3 km, 15-minute | Training inputs (via Open-Meteo's historical forecast API) and forecast inputs (NOAA files via Herbie) | HRRR is public domain; see Open-Meteo's terms for its API |
+| Sentinel-2 L2A (Earth Search on AWS) | Imagery | Copernicus open data |
+| [DINOv3](https://github.com/facebookresearch/dinov3) ViT-H+/16 | Image features | DINOv3 License (gated on Hugging Face) |
+| USDA NASS Cropland Data Layer 2025 (via Source Cooperative) | Orchard locations | Public domain |
+
+Kansas Mesonet, 2026: Kansas Mesonet Historical Data. Accessed 15 November 2026, http://mesonet.k-state.edu/weather/historical
+
+## Limitations
+
+- **Stations are not in orchards.** They sit in open sites in Kansas farmland. The model predicts what an open-site two-height station would read at the orchard's location, not conditions inside the canopy.
+- **Kansas only.** Flat plains. The model has not been tested in valleys such as California's Central Valley, where terrain drives inversions.
+- **39 of 73 stations** were used for training in this run.
+- **Two HRRR routes.** Training inputs come from Open-Meteo at the station's coordinates; the orchard forecast comes from NOAA's files at the grid cell. Small differences between the two (for example humidity, which is hourly in the training files) are not corrected.
+- **About 3 years of overlap.** Station data covers 4 years, but 15-minute HRRR starts on 2023-09-22.
+- **Short-range training.** The HRRR used for training is short lead time, so accuracy at 12 to 18 hours ahead is lower than the scores above suggest.
+- **Cell level.** Predictions are per 3 km HRRR cell that contains orchard, not per individual orchard block. Many cells contain only a small orchard area.
+- **No terrain input.** Elevation and cold-air drainage are not modelled directly.
+- **Hyperparameters were set by hand,** not tuned.
+
+## Setup
+
+See [`scripts/README.md`](scripts/README.md) for how to run each step. Python packages are in `requirements.txt`. The scripts were run on a Slurm cluster; the `.sh` files contain cluster-specific paths that you need to edit.
+
+## Other tools in this repo: HRRR downloads, forecast and app
+
+Run instructions for the tools developed earlier in this repo (HRRR point and station downloads, live forecast features, Meteostat baseline, Streamlit app).
 
 A tool that uses weather readings at 5 ft and 30 ft to tell orchard sprayers **Go / Caution / Stop**.
 
-## Repository layout
+### Repository layout
 
 - `data/` – weather data
 - `science/` – analysis and decision logic
 - `app/` – user-facing application
 
-## Quick start
+### Quick start
 
 Needs Python 3.11+ and internet. No API key or account.
 Use a virtual environment: Meteostat needs pandas >= 2.3, which can clash with
@@ -33,7 +135,7 @@ python science/explore_meteostat.py                            # Meteostat stati
 - `forecast` = last 2 days + next 2 days. `past` works from about 2018 on; the HRRR-only
   80 m columns (`*_hrrr`) need dates from about 23 Mar 2021 on (empty before that).
 
-### Add your own location
+#### Add your own location
 
 Edit the `POINTS` list at the top of [`science/fetch_hrrr.py`](science/fetch_hrrr.py)
 (the 15-min script uses the same list). Name, then (latitude, longitude); US only (HRRR covers CONUS):
@@ -45,13 +147,13 @@ POINTS = {
 }
 ```
 
-### Data source
+#### Data source
 
 Weather comes from NOAA HRRR via Open-Meteo (no API key). Open-Meteo has no HRRR
 temperature at 80 m, so that one column is filled from NOAA GFS (`temp_80m_source`).
 As an all-HRRR check, the HRRR pressure-level profile is also interpolated to 80 m.
 
-### Output: `data/hrrr_<point>_<mode>.csv` (one row per hour, local time)
+#### Output: `data/hrrr_<point>_<mode>.csv` (one row per hour, local time)
 
 | column | meaning |
 |---|---|
@@ -67,7 +169,7 @@ As an all-HRRR check, the HRRR pressure-level profile is also interpolated to 80
 | `hrrr_lowest_level_agl_m` | height of lowest HRRR level used (~40 m good, ~200 m = rough estimate) |
 | `dT_80m_hrrr_minus_2m_F`, `inversion_hrrr` | T80m - T2m with HRRR 80 m; inversion if > 0 |
 
-### 15-minute output: `data/hrrr15_<point>_<mode>.csv`
+#### 15-minute output: `data/hrrr15_<point>_<mode>.csv`
 
 Real 15-min HRRR output: `temp_2m_F`, `wind_10m_mph`, `wind_80m_mph`, `dir_10m_deg`, `dir_80m_deg`.
 `rh_pct` is included but is **hourly values filled in** (use it as hourly).
@@ -86,7 +188,7 @@ so no dT; instead, inversion hints:
 Against the hourly dT (hours where GFS and HRRR agree), `wind_ratio_80_10 >= 1.5`
 catches 80% of inversion hours with 16% false alarms; `>= 2` catches 64% with 4%.
 
-## Meteostat: single-station baseline (Washington State)
+### Meteostat: single-station baseline (Washington State)
 
 `science/explore_meteostat.py` (Meteostat v2 API, falls back to v1) writes:
 - `data/meteostat_wa_stations.csv`: all 51 WA stations (48 with hourly data):
@@ -103,7 +205,7 @@ Findings:
   at all 5 stations; dew point (v2 API), gusts, visibility, snow depth, sunshine were 100% missing.
 - Stations are mostly airports (nearest to Wenatchee: Pangborn airport, 8.6 km), not orchards.
 
-## Kansas Mesonet stations: 15-min HRRR at each station
+### Kansas Mesonet stations: 15-min HRRR at each station
 
 `data/ks_stations_both_heights.csv`: 73 Kansas Mesonet (KSRE) stations that measure at two heights.
 
@@ -117,7 +219,7 @@ hits Open-Meteo's "too many concurrent requests" limit (the script waits it out)
 15-min output above, with `time_utc` in **UTC**. Stopped runs can be restarted; finished stations are skipped.
 HRRR 15-min has temperature at 2 m only, so dT must come from the stations' own two-height readings.
 
-## Forecast: HRRR next ~48 h -> model features
+### Forecast: HRRR next ~48 h -> model features
 
 `science/fetch_hrrr_forecast.py` downloads the live HRRR forecast and builds **exactly the
 training-table feature columns** (same names, units, UTC, definitions), ready for the trained models.
@@ -140,7 +242,7 @@ Output `data/forecast/hrrr_forecast_<points>_<step>_<fetch time>UTC.csv` (not in
   hourly values filled in (`real_15min = False`). Accuracy drops with lead time.
 - Many points per request; responses cached in `data/forecast_cache/` and reused for 60 min.
 
-## App: click a location in Kansas -> HRRR forecast
+### App: click a location in Kansas -> HRRR forecast
 
 ```bash
 conda activate hackaton            # or the venv with requirements.txt

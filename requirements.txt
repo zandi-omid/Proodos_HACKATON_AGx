@@ -1,7 +1,26 @@
-requests
-pandas>=2.3
+# data pipeline
 numpy
+pandas>=2.3
+pyarrow
+xarray
+zarr
+dask
+pyproj
+rasterio
 matplotlib
+icechunk          # CDL from Source Cooperative
+ksmesopy          # Kansas Mesonet station list
+pystac-client     # Sentinel-2 search
+odc-stac          # Sentinel-2 loading
+herbie-data       # HRRR forecast download
+cfgrib
+lightgbm
+# DINOv3 features (GPU environment)
+torch
+transformers>=4.56
+huggingface_hub
+requests          # Open-Meteo HRRR pull (science/)
+# Open-Meteo HRRR tools, Meteostat baseline and the Streamlit app (science/, app/)
 meteostat>=2
 streamlit
 streamlit-folium

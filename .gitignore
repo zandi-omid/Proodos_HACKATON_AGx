@@ -41,3 +41,23 @@ data/*.log
 data/*.zip
 data/forecast/
 data/forecast_cache/
+
+# ---------- Pipeline (scripts/) data and outputs ----------
+*.pyc
+*.log
+*.out
+# data and outputs (large, or under their providers' terms)
+*.tif
+*.zarr/
+*.parquet
+*.npz
+*.zip
+ks5min/
+s2/
+s2_orchards/
+dino/
+dino_orchards/
+dinofeat/
+table/
+hrrr/
+models/
