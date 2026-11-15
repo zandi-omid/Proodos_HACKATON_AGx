@@ -10,16 +10,20 @@ Two modes:
 
 Output: one CSV per point in data/, e.g. data/hrrr_fresno_forecast.csv
 Columns: time, temp_2m_F, temp_80m_F, wind_10m_mph, wind_80m_mph,
-         dir_10m_deg, dir_80m_deg, rh_pct, cloud_pct, temp_80m_source,
-         dT_80m_minus_2m_F, inversion
+         dir_10m_deg, dir_80m_deg, rh_pct, cloud_pct, elev_m, temp_80m_source,
+         dT_80m_minus_2m_F, inversion,
+         temp_80m_hrrr_F, hrrr_lowest_level_agl_m, dT_80m_hrrr_minus_2m_F, inversion_hrrr
 
 Note: Open-Meteo serves no HRRR temperature at 80 m, so temp_80m_F is filled
 from NOAA GFS (temp_80m_source = "gfs"). All other columns are HRRR.
+The *_hrrr columns are an all-HRRR check: the HRRR temperature profile
+(2 m + pressure levels above ground) interpolated to 80 m.
 
-Requires: pip install requests pandas
+Requires: pip install requests pandas numpy
 """
 import sys
 import requests
+import numpy as np
 import pandas as pd
 
 # ---- 1. Your points (edit freely) ----
@@ -27,6 +31,7 @@ POINTS = {
     "fresno":     (36.74, -119.79),   # Central Valley orchards
     "modesto":    (37.64, -120.99),
     "maricopa_az": (33.07, -111.97),
+    "kern_almonds": (35.60, -119.33),  # almond/pistachio belt between Wasco and Shafter, Kern Co.
 }
 
 # ---- 2. Variables (two heights: 2 m & 80 m temp, 10 m & 80 m wind) ----
@@ -36,6 +41,16 @@ HOURLY = [
     "wind_direction_10m", "wind_direction_80m",
     "relative_humidity_2m", "cloud_cover",
 ]
+
+# ---- 3. All-HRRR alternative to the 80 m temperature ----
+# HRRR also gives temperature on pressure levels. Levels that are ABOVE the
+# ground (pressure lower than surface pressure) form a profile we interpolate
+# to 80 m - HRRR only, no GFS mix. In the Central Valley the lowest level above
+# ground is 1000 hPa (~40-60 m) on high-pressure days, otherwise 975 hPa (~200 m).
+PRESSURE_LEVELS = [1000, 975, 950, 925]   # highest pressure (lowest height) first
+HOURLY += ["surface_pressure"]
+HOURLY += [f"temperature_{p}hPa" for p in PRESSURE_LEVELS]
+HOURLY += [f"geopotential_height_{p}hPa" for p in PRESSURE_LEVELS]
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 PAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
@@ -59,8 +74,10 @@ def fetch(lat, lon, mode, start=None, end=None, model="ncep_hrrr_conus"):
 
     r = requests.get(url, params=params, timeout=60)
     r.raise_for_status()
-    h = r.json()["hourly"]
-    df = pd.DataFrame(h).rename(columns={
+    j = r.json()
+    df = pd.DataFrame(j["hourly"])
+    df["elev_m"] = j["elevation"]  # ground height above sea level used by Open-Meteo
+    df = df.rename(columns={
         "temperature_2m": "temp_2m_F", "temperature_80m": "temp_80m_F",
         "wind_speed_10m": "wind_10m_mph", "wind_speed_80m": "wind_80m_mph",
         "wind_direction_10m": "dir_10m_deg", "wind_direction_80m": "dir_80m_deg",
@@ -68,6 +85,34 @@ def fetch(lat, lon, mode, start=None, end=None, model="ncep_hrrr_conus"):
     })
     df["time"] = df["time"].str.replace("T", " ")
     return df
+
+
+def add_hrrr_80m(df, target_m=80):
+    """All-HRRR estimate of the temperature at 80 m above ground.
+
+    Build each hour's HRRR temperature profile from the 2 m value plus every
+    pressure level that is above ground, then interpolate linearly to 80 m.
+    Adds: temp_80m_hrrr_F, dT_80m_hrrr_minus_2m_F, inversion_hrrr and
+    hrrr_lowest_level_agl_m (height of the lowest level used; if it is ~200 m,
+    the 80 m value is a straight-line guess between 2 m and 200 m).
+    Then drops the raw pressure-level columns.
+    """
+    t80, lowest = [], []
+    for _, row in df.iterrows():
+        heights, temps = [2.0], [row["temp_2m_F"]]
+        for p in PRESSURE_LEVELS:  # lowest level first, so heights go up
+            agl = row[f"geopotential_height_{p}hPa"] - row["elev_m"]
+            if row["surface_pressure"] > p and agl > 10:  # level is above ground
+                heights.append(agl)
+                temps.append(row[f"temperature_{p}hPa"])
+        t80.append(np.interp(target_m, heights, temps))
+        lowest.append(round(heights[1]) if len(heights) > 1 else np.nan)
+    df["temp_80m_hrrr_F"] = np.round(t80, 1)
+    df["hrrr_lowest_level_agl_m"] = lowest
+    df["dT_80m_hrrr_minus_2m_F"] = (df["temp_80m_hrrr_F"] - df["temp_2m_F"]).round(1)
+    df["inversion_hrrr"] = df["dT_80m_hrrr_minus_2m_F"] > 0
+    raw = [c for c in df.columns if c.endswith("hPa")]
+    return df.drop(columns=raw + ["surface_pressure"])
 
 
 def main():
@@ -92,12 +137,16 @@ def main():
             df.loc[missing, "temp_80m_source"] = "gfs"
             print(f"  {name}: 80 m temperature filled from GFS for {int(missing.sum())} hours")
 
+        df["temp_80m_F"] = df["temp_80m_F"].astype(float)  # empty HRRR column was text
         df["dT_80m_minus_2m_F"] = (df["temp_80m_F"] - df["temp_2m_F"]).round(1)
         df["inversion"] = df["dT_80m_minus_2m_F"] > 0
+        df = add_hrrr_80m(df)
         out = f"data/hrrr_{name}_{mode}.csv"
         df.to_csv(out, index=False)
         n_inv = int(df["inversion"].sum())
-        print(f"{name}: {len(df)} hours saved to {out}  |  inversion hours: {n_inv}")
+        n_hrrr = int(df["inversion_hrrr"].sum())
+        print(f"{name}: {len(df)} hours saved to {out}  |  inversion hours: "
+              f"{n_inv} (GFS 80 m), {n_hrrr} (HRRR profile at 80 m)")
 
 
 if __name__ == "__main__":
