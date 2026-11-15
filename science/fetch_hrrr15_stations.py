@@ -31,7 +31,7 @@ from pathlib import Path
 import pandas as pd
 
 from fetch_hrrr import DATA_DIR, PAST_URL, get_json
-from fetch_hrrr_15min import MINUTELY_15, add_signals
+from features import OPEN_METEO_VARS, build_features  # the ONE feature definition
 
 # ---- Inputs: station file, dates (default: the last full year up to yesterday), workers ----
 yesterday = date.today() - timedelta(days=1)
@@ -61,24 +61,17 @@ def download(st):
 
     params = {
         "latitude": st["latitude"], "longitude": st["longitude"],
-        "minutely_15": ",".join(MINUTELY_15),
+        "minutely_15": ",".join(OPEN_METEO_VARS),
         "models": "ncep_hrrr_conus",
         "temperature_unit": "fahrenheit", "wind_speed_unit": "mph",
         "timezone": "GMT",
         "start_date": args.start, "end_date": args.end,
     }
     j = get_json(PAST_URL, params, timeout=300)  # a long period takes ~30-60 s to serve
-    df = pd.DataFrame(j["minutely_15"]).rename(columns={
-        "time": "time_utc",
-        "temperature_2m": "temp_2m_F", "relative_humidity_2m": "rh_pct",
-        "wind_speed_10m": "wind_10m_mph", "wind_speed_80m": "wind_80m_mph",
-        "wind_direction_10m": "dir_10m_deg", "wind_direction_80m": "dir_80m_deg",
-    })
-    df["time_utc"] = df["time_utc"].str.replace("T", " ")
-    df = add_signals(df)
+    df = build_features(j["minutely_15"])
 
     tmp = out.with_suffix(".part")  # write then rename, so a crash never leaves a half file
-    df.to_csv(tmp, index=False)
+    df.to_csv(tmp, index=False, date_format="%Y-%m-%d %H:%M")
     tmp.rename(out)
     n_missing = int(df["temp_2m_F"].isna().sum())
     return (f"{st['name']}: {len(df)} rows, {n_missing} missing -> {out.name}"

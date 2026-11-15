@@ -116,3 +116,26 @@ station per year; 73 stations took ~4 min; **not in git**, re-create with the co
 hits Open-Meteo's "too many concurrent requests" limit (the script waits it out). Same columns as the
 15-min output above, with `time_utc` in **UTC**. Stopped runs can be restarted; finished stations are skipped.
 HRRR 15-min has temperature at 2 m only, so dT must come from the stations' own two-height readings.
+
+## Forecast: HRRR next ~48 h -> model features
+
+`science/fetch_hrrr_forecast.py` downloads the live HRRR forecast and builds **exactly the
+training-table feature columns** (same names, units, UTC, definitions), ready for the trained models.
+All features come from one function, `science/features.py` (`build_features`), which the
+training downloads also use (checked: it rebuilds `gove_5se.csv` byte-for-byte).
+
+```bash
+python science/fetch_hrrr_forecast.py                               # all Kansas stations, 15-min
+python science/fetch_hrrr_forecast.py --lat 39.12 --lon -96.64      # one point
+python science/fetch_hrrr_forecast.py --grid 37 40 -102 -94.6 0.25  # lat/lon grid
+python science/fetch_hrrr_forecast.py --step hourly                 # hourly instead of 15-min
+```
+From Python: `from fetch_hrrr_forecast import get_forecast; df = get_forecast(points)` then
+`model.predict(df[FEATURES[1:]])` (`from features import FEATURES`).
+
+Output `data/forecast/hrrr_forecast_<points>_<step>_<fetch time>UTC.csv` (not in git):
+`name, lat, lon, hrrr_lat, hrrr_lon, fetched_utc, time_utc, lead_hours, real_15min` + the 9 features.
+- `lead_hours`: hours after the download; negative = the 3 past hours kept for the 1-hour cooling lag.
+- HRRR reaches ~45-48 h ahead. **Real 15-min values only for the first ~18 h**; later 15-min steps are
+  hourly values filled in (`real_15min = False`). Accuracy drops with lead time.
+- Many points per request; responses cached in `data/forecast_cache/` and reused for 60 min.

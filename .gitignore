@@ -39,3 +39,5 @@ htmlcov/
 data/hrrr15_stations_*/
 data/*.log
 data/*.zip
+data/forecast/
+data/forecast_cache/
